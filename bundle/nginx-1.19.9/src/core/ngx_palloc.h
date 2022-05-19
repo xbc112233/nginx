@@ -57,6 +57,7 @@ typedef struct {
 struct ngx_pool_s {
     ngx_pool_data_t       d;
     size_t                max;
+    size_t                ref;
     ngx_pool_t           *current;
     ngx_chain_t          *chain;
     ngx_pool_large_t     *large;
