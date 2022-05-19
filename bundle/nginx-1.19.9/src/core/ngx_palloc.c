@@ -7,7 +7,12 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_core_probe.h>
 
+#if defined(__SANITIZE_ADDRESS__)
+#include <sanitizer/asan_interface.h>
+#define SENTINEL_BUF_SIZE 4
+#endif
 
 static ngx_inline void *ngx_palloc_small(ngx_pool_t *pool, size_t size,
     ngx_uint_t align);
@@ -33,11 +38,17 @@ ngx_create_pool(size_t size, ngx_log_t *log)
     size = size - sizeof(ngx_pool_t);
     p->max = (size < NGX_MAX_ALLOC_FROM_POOL) ? size : NGX_MAX_ALLOC_FROM_POOL;
 
+#if defined(__SANITIZE_ADDRESS__)
+    __asan_poison_memory_region(p->d.last, size);
+#endif
+
     p->current = p;
     p->chain = NULL;
     p->large = NULL;
     p->cleanup = NULL;
     p->log = log;
+    p->ref = 1;
+    ngx_core_probe_create_pool_done(p, size);
 
     return p;
 }
@@ -49,6 +60,10 @@ ngx_destroy_pool(ngx_pool_t *pool)
     ngx_pool_t          *p, *n;
     ngx_pool_large_t    *l;
     ngx_pool_cleanup_t  *c;
+
+    if (--pool->ref > 0) {
+        return;
+    }
 
     for (c = pool->cleanup; c; c = c->next) {
         if (c->handler) {
@@ -87,6 +102,9 @@ ngx_destroy_pool(ngx_pool_t *pool)
     }
 
     for (p = pool, n = pool->d.next; /* void */; p = n, n = n->d.next) {
+#if defined(__SANITIZE_ADDRESS__)
+        __asan_unpoison_memory_region(p, p->d.end - (u_char*)p);
+#endif
         ngx_free(p);
 
         if (n == NULL) {
@@ -110,6 +128,9 @@ ngx_reset_pool(ngx_pool_t *pool)
 
     for (p = pool; p; p = p->d.next) {
         p->d.last = (u_char *) p + sizeof(ngx_pool_t);
+#if defined(__SANITIZE_ADDRESS__)
+        __asan_poison_memory_region(p->d.last, p->d.end - p->d.last);
+#endif
         p->d.failed = 0;
     }
 
@@ -118,6 +139,12 @@ ngx_reset_pool(ngx_pool_t *pool)
     pool->large = NULL;
 }
 
+ngx_pool_t *
+ngx_hold_pool(ngx_pool_t *pool)
+{
+    ++pool->ref;
+    return pool;
+}
 
 void *
 ngx_palloc(ngx_pool_t *pool, size_t size)
@@ -131,7 +158,6 @@ ngx_palloc(ngx_pool_t *pool, size_t size)
     return ngx_palloc_large(pool, size);
 }
 
-
 void *
 ngx_pnalloc(ngx_pool_t *pool, size_t size)
 {
@@ -144,7 +170,6 @@ ngx_pnalloc(ngx_pool_t *pool, size_t size)
     return ngx_palloc_large(pool, size);
 }
 
-
 static ngx_inline void *
 ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
 {
@@ -156,11 +181,20 @@ ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
     do {
         m = p->d.last;
 
+#if defined(__SANITIZE_ADDRESS__)
+        m += SENTINEL_BUF_SIZE;
+#endif
+
         if (align) {
             m = ngx_align_ptr(m, NGX_ALIGNMENT);
         }
 
+#if defined(__SANITIZE_ADDRESS__)
+        if (p->d.end >= m + size) {
+            __asan_unpoison_memory_region(m, size);
+#else
         if ((size_t) (p->d.end - m) >= size) {
+#endif
             p->d.last = m + size;
 
             return m;
@@ -195,6 +229,10 @@ ngx_palloc_block(ngx_pool_t *pool, size_t size)
     new->d.failed = 0;
 
     m += sizeof(ngx_pool_data_t);
+#if defined(__SANITIZE_ADDRESS__)
+    __asan_poison_memory_region(m, psize - sizeof(ngx_pool_data_t));
+    m += SENTINEL_BUF_SIZE;
+#endif
     m = ngx_align_ptr(m, NGX_ALIGNMENT);
     new->d.last = m + size;
 
@@ -205,6 +243,10 @@ ngx_palloc_block(ngx_pool_t *pool, size_t size)
     }
 
     p->d.next = new;
+
+#if defined(__SANITIZE_ADDRESS__)
+    __asan_unpoison_memory_region(m, size);
+#endif
 
     return m;
 }
@@ -305,6 +347,53 @@ ngx_pcalloc(ngx_pool_t *pool, size_t size)
     }
 
     return p;
+}
+
+
+void *
+ngx_prealloc(ngx_pool_t *pool, void *p, size_t old_size, size_t new_size)
+{
+    void *new;
+    ngx_pool_t *node;
+
+    if (p == NULL) {
+        return ngx_palloc(pool, new_size);
+    }
+
+    if (new_size == 0) {
+        if ((u_char *) p + old_size == pool->d.last) {
+           pool->d.last = p;
+        } else {
+           ngx_pfree(pool, p);
+        }
+
+        return NULL;
+    }
+
+    if (old_size <= pool->max) {
+        for (node = pool; node; node = node->d.next) {
+            if ((u_char *)p + old_size == node->d.last
+                && (u_char *)p + new_size <= node->d.end) {
+                node->d.last = (u_char *)p + new_size;
+                return p;
+            }
+        }
+    }
+
+    if (new_size <= old_size) {
+       return p;
+    }
+
+    new = ngx_palloc(pool, new_size);
+    if (new == NULL) {
+        return NULL;
+    }
+
+    ngx_memcpy(new, p, old_size);
+
+    ngx_pfree(pool, p);
+
+    return new;
 }
 
 
