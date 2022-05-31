@@ -1,0 +1,8 @@
+./configure \
+  --with-cc-opt='-O0 -Werror  -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+  --add-module=modules/nginx-rtmp-module \
+  --add-module=modules/nginx-client-module \
+  --add-module=modules/nginx-multiport-module \
+  --add-module=modules/nginx-toolkit-module \
+  --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+  --with-openssl-opt=-g --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_ssl_module
