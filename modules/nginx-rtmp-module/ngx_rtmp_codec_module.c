@@ -1485,8 +1485,10 @@ static ngx_int_t
 ngx_rtmp_codec_add_variables(ngx_conf_t *cf)
 {
     ngx_rtmp_variable_t  *var, *v;
-
-    for (v = ngx_rtmp_codec_variabes; v->name.len; v++) {
+    ngx_uint_t arraySeq = 0;
+    for (arraySeq = 0; arraySeq < 2; ++arraySeq) {
+//    for (v = ngx_rtmp_codec_variabes; v->name.len; v++) {
+        v = &ngx_rtmp_codec_variabes[arraySeq];
         var = ngx_rtmp_add_variable(cf, &v->name, v->flags);
         if (var == NULL) {
             return NGX_ERROR;
