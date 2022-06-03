@@ -57,7 +57,9 @@ static ngx_command_t  ngx_http_broadcast_commands[] = {
       ngx_conf_set_str_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_broadcast_conf_t, suffix),
-      NULL }
+      NULL },
+
+	ngx_null_command
 };
 
 
