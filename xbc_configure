@@ -1,11 +1,26 @@
-./configure \
-  --with-cc-opt='-O0 -Werror  -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
-  --add-module=modules/nginx-rtmp-module \
-  --add-module=modules/nginx-client-module \
-  --add-module=modules/nginx-multiport-module \
-  --add-module=modules/nginx-toolkit-module \
-  --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
-  --with-openssl-opt=-g --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_ssl_module
+#!/bin/bash
 
-github token使用方法
-https://blog.51cto.com/u_15064643/4215363
+os=$1
+
+if [ $os == "ubuntu" ];then
+    ./configure \
+      --with-cc-opt='-O0 -Werror  -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+      --add-module=modules/nginx-rtmp-module \
+      --add-module=modules/nginx-client-module \
+      --add-module=modules/nginx-multiport-module \
+      --add-module=modules/nginx-toolkit-module \
+      --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+      --with-openssl-opt=-g --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_ssl_module
+elif [ $os == "mac" ];then
+    ./configure --prefix=/Users/xbc/openresty \
+    --with-cc-opt='-O0 -Werror  -g -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+    --add-module=modules/nginx-rtmp-module \
+    --add-module=modules/nginx-client-module \
+    --add-module=modules/nginx-multiport-module \
+    --add-module=modules/nginx-toolkit-module \
+    --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -fsanitize=address -fno-omit-frame-pointer -fsanitize-recover=address' \
+    --with-openssl-opt=-g --with-stream --with-stream_ssl_module --with-pcre=/Users/xbc/custom_lib/pcre-8.45 --with-stream_ssl_preread_module --with-openssl=/opt/homebrew/opt/openssl@3 --with-http_ssl_module
+fi
+
+#github token使用方法
+#https://blog.51cto.com/u_15064643/4215363
